@@ -170,21 +170,24 @@ lims2 = lims*nmPix;
 
 for kk = 1:length(lims)
 
-    rowsNow = x>lims2(kk,1) & x<lims2(kk,2) & y>lims2(kk,3) & y<lims2(kk,4); % spatial location
-    rowsNow = rowsNow & blades; % red channel <-- might revist other channel later, stay simple for now
+    rowsNowAll = x>lims2(kk,1) & x<lims2(kk,2) & y>lims2(kk,3) & y<lims2(kk,4); % spatial location
+    rowsNow = rowsNowAll & blades; % red channel <-- might revist other channel later, stay simple for now
     if sum(rowsNow) == 0
         error('No particles') % Unlikely error, but might use this to set other conditions later...
     end
 
     % Center the particle in its own reference frame
     xnow = x(rowsNow);
-    xnow = xnow-mean(xnow);
+    xbar = mean(xnow);
+    xnow = xnow-xbar;
 
     ynow = y(rowsNow);
-    ynow = ynow-mean(ynow);
+    ybar = mean(ynow);
+    ynow = ynow-ybar;
 
     znow = z(rowsNow);
-    znow = znow-mean(znow);
+    zbar = mean(znow);
+    znow = znow-zbar;
 
     % Put into the Heydarian "subParticle" format
     subParticles{1,kk}.points = [xnow ynow znow];
@@ -192,18 +195,32 @@ for kk = 1:length(lims)
     % Have all the peakselector data tag along
     subParticles{1,kk}.txtData = txtData(rowsNow,:);
     subParticles{1,kk}.headers = headers;
-
+    
     % This is for comparing to the segmented image coordinate system
-    xnow = x(rowsNow);
-    xnow = xnow-lims2(kk,1);
-    ynow = y(rowsNow);
-    ynow = ynow-lims2(kk,3);
+    xnow = x(rowsNow)-lims2(kk,1);
+    ynow = y(rowsNow)-lims2(kk,3);
+    znow = z(rowsNow) - zbar;
     subParticles{1,kk}.image = [xnow ynow znow];
 
     % Put into the Heydarian "particles" format
     particles{1,kk}.coords(:,1:3) = subParticles{1,kk}.points;
     particles{1,kk}.coords(:,5) = sigXY(rowsNow);
     particles{1,kk}.coords(:,10) = sigZ(rowsNow);
+
+    % Have the second channel tag along in case we want to use this information
+    rowsNow2 = rowsNowAll & ~blades;
+    xnow = x(rowsNow2) - xbar;
+    ynow = y(rowsNow2) - ybar;
+    znow = z(rowsNow2) - zbar;
+    subParticles{1,kk}.pointsCh2 = [xnow ynow znow];
+    subParticles{1,kk}.sigmaCh2 = [sigXY(rowsNow2) sigZ(rowsNow2)];
+    subParticles{1,kk}.txtDataCh2 = txtData(rowsNow2,:);
+    % For image comparison with second channel
+    xnow = x(rowsNow2)-lims2(kk,1);
+    ynow = y(rowsNow2)-lims2(kk,3);
+    znow = z(rowsNow2) - zbar;
+    subParticles{1,kk}.imageCh2 = [xnow ynow znow];
+
 
 end
 clear rowsNow xnow ynow znow
@@ -217,14 +234,16 @@ for kk = 1:Nfig
     Rslice = Rslice(lims(kk,3):lims(kk,4),:);
 
     xyz = subParticles{1,kk}.image/nmPix;
+    xyzCh2 = subParticles{1,kk}.imageCh2/nmPix;
 
     subplot(5,5,kk)
     imagesc(Rslice)
     set(gca,'DataAspectRatio',[1 1 1])
-    caxis([0 .25]) % 5 nm
-    caxis([0 0.04]) % 2 nm
+    caxis([0 0.04]) % optimized for the 2 nm rendering
+    colormap gray
     hold on
         plot(xyz(:,1),xyz(:,2),'.m','MarkerSize',8)
+        plot(xyzCh2(:,1),xyzCh2(:,2),'.g','MarkerSize',8)
     hold off
 
 end 
