@@ -2,19 +2,24 @@
 % (1) First follow instructions to run piezoSegment_beadsRemoved
 %       Note: want the _particles.mat file output by this script
 % (2) Fill in the user-parameters below and run the script
+% (3) The script outputs several figures for inspection. It additionally
+%       generates txt files that can be loaded into PeakSelector to render
+%       the super particle with brightness, etc. taken into consideration.
 
 clc, clear, close all
 %% USER PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Filenames & Directories
-dataDir = 'C:\Users\RMLee\Dropbox (HHMI)\Patapoutian_iPALM_data_analyzed\iPALM_data_processed_EM\21.11.01-2\Run2-561\'; % Where is the data?
-saveTag = 'Run2-561_c123_sum_X3_concat_processed_overlay_Jesse_IDL_unZ_200-310_ASCII_beadsRemoved_rRemoveX3_rRemoveY7'; % Base filename for the data
+dataDir = 'C:\Users\RMLee\Dropbox (HHMI)\Patapoutian_iPALM_data_analyzed\iPALM_data_processed_EM\21.11.02-5\Run1-561\';
+saveTag = 'Run1-561_c123_sum_X14_processed_overlay_Fiducial_transform_complete_IDL_unZ_175-285_ASCII_beadsRemoved_rRemoveX3_rRemoveY7';
+
 % dataDir & saveTag will be used in the file name used when saving figures, etc.
 spaPATH = 'C:\Users\RMLee\Documents\GitHub\smlm_datafusion3d\'; % Where is the Heydarian, et al. repository?
 spaBUILD = 'C:\Users\RMLee\Documents\GitHub\Fusion3DBuild\'; % Where was the Heydarian, et al. repository built?
 
 %%%%% Imaging Parameters
 xyScale = 133.33; % nm/pix in the txt file (which is different than the rendered image!)
-filtZ = 0; % If filtZ, will remove 
+filtZ = 0; % If filtZ, will remove
+zThresh = 75; % nm, only used if filtZ
 
 %%%%% Scale Sweep
 Nsweep = 25;
@@ -63,6 +68,34 @@ end
 
 load([dataDir saveTag '_particles.mat'])
 
+% Optionally filtering
+if filtZ
+
+    for kk = 1:length(particles)
+
+        xyz = particles{kk}.coords;
+        z = xyz(:,3);
+        zm = mean(z(:));
+        badrows = abs(z-zm) > zThresh;
+%         disp([sum(badrows) size(xyz,1)])
+        disp([num2str(sum(badrows)) ' of ' num2str(size(xyz,1)) ' removed'])
+        particles{kk}.coords = xyz(~badrows,:);
+
+        xyz = subParticles{kk}.points;
+        z = xyz(:,3);
+        zm = mean(z(:));
+        badrows = abs(z-zm) > zThresh;
+        subParticles{kk}.points = xyz(~badrows,:);
+        subParticles{kk}.sigma = subParticles{kk}.sigma(~badrows,:);
+        subParticles{kk}.txtData = subParticles{kk}.txtData(~badrows,:);
+        subParticles{kk}.image = subParticles{kk}.image(~badrows,:);
+
+    end
+
+    saveTag = [saveTag '_filtZ' num2str(zThresh) ];
+
+end
+
 %% Scale sweep (Heydarian, et al)
 tic
 
@@ -105,18 +138,21 @@ visualizeSMLM3D(sup,scale/2, 1); % scale/2 seems to match demo script, but they 
 xlabel('x'),ylabel('y'),zlabel('z')
 set(gca,'DataAspectRatio',[1 1 1])
 set(gca,'FontSize',16)
+set(gcf, 'InvertHardcopy', 'off')
+saveas(gcf,[dataDir 'initAlignedParticles_' saveTag '.png'],'png')
+saveas(gcf,[dataDir 'initAlignedParticles_' saveTag '.fig'],'fig')
 
 %% Heydarian, et al Step 3
 % bootstrapping with imposing symmetry prior knowledge
 USE_SYMMETRY = 3;   % flag for imposing symmetry prio knowledge (n-fold = #) <-- THIS DOES NOT WORK YET
 M1 = [];            % not implemented
-[superParticleWithPK, ~] = one2all3D(initAlignedParticles, iter, M1, [dataDir 'withSym_'], sup, USE_SYMMETRY, USE_GPU_GAUSSTRANSFORM, USE_GPU_EXPDIST);
+[superParticleWithPK, ~] = one2all3D(initAlignedParticles, iter, M1, [dataDir 'withSym_' saveTag '_'], sup, USE_SYMMETRY, USE_GPU_GAUSSTRANSFORM, USE_GPU_EXPDIST);
 
 % % STEP 3
 % bootstrapping withOUT imposing symmetry prior knowledge
 USE_SYMMETRY = 0;   % flag for imposing symmetry prio knowledge
 M1=[];              % not implemented
-[superParticleWithoutPK, ~] = one2all3D(initAlignedParticles, iter, M1, [dataDir 'withoutSym_'], sup, USE_SYMMETRY, USE_GPU_GAUSSTRANSFORM, USE_GPU_EXPDIST);
+[superParticleWithoutPK, ~] = one2all3D(initAlignedParticles, iter, M1, [dataDir 'withoutSym_' saveTag '_'], sup, USE_SYMMETRY, USE_GPU_GAUSSTRANSFORM, USE_GPU_EXPDIST);
 
 % tSteps123 = toc;
 
@@ -188,23 +224,27 @@ toTxt(:,35) = toTxt(:,35) - min(toTxt(:,35)) + 1;
 
 writematrix(toTxt,[dataDir 'PeakSelectorFormat_' saveTag '_bootstrappedSymmetryParticles_' num2str(iter) 'iterBoot_scale' num2str(scale) '.txt'],'delimiter','\t')
 
-%% [Work in Progress] Visualize the results
+%% Visualize the Results - Without Symmetry
 
-% visualizeSMLM3D(superParticleWithoutPK{1,5},0.05, 1);
-% visualizeCloud3D(superParticleWithPK{1,5},0.05, 1);
-
-% visualizeSMLM3D(sup,scale/2, 1);
 visualizeSMLM3D(superParticleWithoutPK{1,6},scale/2, 1);
-% visualizeSMLM3D(superParticleWithPK{1,6},scale/2, 1);
 xlabel('x (nm)'),ylabel('y (nm)'),zlabel('z (nm)')
 set(gca,'DataAspectRatio',[1 1 1])
 set(gca,'FontSize',16)
+set(gcf, 'InvertHardcopy', 'off')
+saveas(gcf,[dataDir 'superParticleNoSym_' saveTag '.png'],'png')
+saveas(gcf,[dataDir 'superParticleNoSym_' saveTag '.fig'],'fig')
 
-% % For 2 nm, this is an interesting option
-axis(40*[-1 1 -1 1 -1 1])
-view([37.5935   55.3090])
+%% Visualize the Results - With Symmetry
 
-%% [Work in Progress]  Plot some example aligned particles
+visualizeSMLM3D(superParticleWithPK{1,6},scale/2, 1);
+xlabel('x (nm)'),ylabel('y (nm)'),zlabel('z (nm)')
+set(gca,'DataAspectRatio',[1 1 1])
+set(gca,'FontSize',16)
+set(gcf, 'InvertHardcopy', 'off')
+saveas(gcf,[dataDir 'superParticleWithSym_' saveTag '.png'],'png')
+saveas(gcf,[dataDir 'superParticleWithSym_' saveTag '.fig'],'fig')
+
+%% Plot some example aligned particles
 figure;
 N = 10;
 for kk = 1:N
@@ -222,16 +262,12 @@ hold off
 
 set(gca,'XTickLabel',{},'YTickLabel',{},'ZTickLabel',{});
 set(gca,'DataAspectRatio',[1 1 1])
-% view([-18.6 6])
-% view([-4.8 -19.8])
 view(2)
-% grid on
 axis off
+saveas(gcf,[dataDir 'AlignedParticles_' saveTag '.png'],'png')
+saveas(gcf,[dataDir 'AlignedParticles_' saveTag '.fig'],'fig')
 
-%% Next steps
-% Check the txt files in PeakSelector
-
-%% Localizations per particle??
+%% Figure: Localizations per particle
 L = NaN*ones(length(subParticles),1);
 for kk = 1:length(subParticles)
     L(kk) = size(subParticles{kk}.points,1);
@@ -243,7 +279,7 @@ xlabel('Number of Localization Points','FontSize',20)
 set(gca,'FontSize',20)
 ylabel('Particle Count','FontSize',20)
 box off
-%saveas(gcf,[saveTag '_HistogramParticleLocalizationNumber.png'],'png')
+saveas(gcf,[dataDir saveTag '_HistogramParticleLocalizationNumber.png'],'png')
 
 %% Save Everything
 save([dataDir saveTag '_piezoAveragingWorkspace.mat'],'-v7.3')
