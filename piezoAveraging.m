@@ -52,10 +52,10 @@ iter = 5; % number of bootstrapping iterations
 
 %% DEFAULTS FOR OPTIONAL INPUTS
 %%%%% Z-Filtering
-if ~exist(filtZ,'var') || isempty(filtZ)
+if ~exist('filtZ','var') || isempty(filtZ)
     filtZ = 0; % default to no filtering
 end
-if ~exist(zThresh,'var') || isempty(zThresh)
+if ~exist('zThresh','var') || isempty(zThresh)
     if filtZ
         error('z-filtering requested but no threshold set')
     else
@@ -64,17 +64,17 @@ if ~exist(zThresh,'var') || isempty(zThresh)
 end
 
 %%%%% Path Setup
-if ~exist(pathSetup,'var') || isempty(pathSetup)
+if ~exist('pathSetup','var') || isempty(pathSetup)
     pathSetup = 1; % default to setting the paths correctly
 end
-if ~exist(spaPATH,'var') || isempty(spaPATH)
+if ~exist('spaPATH','var') || isempty(spaPATH)
     if pathSetup
         error('When pathSetup is true, spaPATH is a required input.')
     else
         spaPATH = NaN;
     end
 end
-if ~exist(spaBUILD,'var') || isempty(spaBUILD)
+if ~exist('spaBUILD','var') || isempty(spaBUILD)
     if pathSetup
         warning('No build path set. Using the default of [spaPATH build\].')
         spaBUILD = [spaPATH 'build\'];
@@ -84,7 +84,7 @@ if ~exist(spaBUILD,'var') || isempty(spaBUILD)
 end
 
 %%%%% Overwriting pre-analyzed data
-if ~exist(overwriteSweep,'var') || isempty(overwriteSweep)
+if ~exist('overwriteSweep','var') || isempty(overwriteSweep)
     overwriteSweep = 0; % Default to not overwriting data
 end
 
