@@ -1,72 +1,126 @@
-%% INSTRUCTIONS
-% (1) First follow instructions to run piezoSegment_beadsRemoved
-%       Note: want the _particles.mat file output by this script
-% (2) Fill in the user-parameters below and run the script
-% (3) The script outputs several figures for inspection. It additionally
-%       generates txt files that can be loaded into PeakSelector to render
-%       the super particle with brightness, etc. taken into consideration.
+% USAGE
+% piezoAveraging(dataDir,saveTag,filtZ,zThresh,pathSetup,spaPATH,spaBUILD,overwriteSweep)
+%
+% INPUTS
+% dataDir               = folder containing the data to be analyzed
+% saveTag               = file root name for loading and saving data
+% filtZ (optional)      = flag to filter particles in z (=1/true) or not 
+%                           (=0/false). Default false.
+% zThresh (optional)    = distance, in nm, to filter in z
+% pathSetup (optional)  = set up the required paths to dependencies inside function? if
+%                           false, make sure paths are setup externally.
+%                           Default true.
+% spaPATH (optional)    = path to smlm_datafusion3d_iPALM repository
+% spaBUILD (optional)   = path to smlm_datafusion3d_iPALM build. Default to
+%                           build subfolder of spaPATH.
+% ovewriteSweep (opt.)  = flat to overwrite previously processed
+%                           scale_sweep data. Defaults to 0 (false).
+%
+% OUTPUTS
+% Multiple figures are generated showing superparticles and quality control
+% results. The scale sweep data is saved to a .mat file as an intermediate
+% checkpoint. Superparticles are saved in PeakSelector compatible txt
+% files. % The full workspace is saved to
+% [dataDir saveTag '_piezoAveragingWorkspace.mat']
 
-clc, clear, close all
-%% USER PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%% Filenames & Directories
-dataDir = 'Y:\Rachel\Patapoutian_iPALM_data_analyzed\iPALM_data_processed_EM\21.11.03-1\Run1-561';
-saveTag = 'Run1-561_c123_sum_X10_processed_overlay_KS_purged_IDL_unZ_175-300_ASCII_beadsRemoved_rRemoveX3_rRemoveY7';
-
-% dataDir & saveTag will be used in the file name used when saving figures, etc.
-spaPATH = 'D:\Users\AICGUEST\Documents\GitHub\smlm_datafusion3d_iPALM\'; % Where is the Heydarian, et al. repository?
-spaBUILD = [spaPATH 'build\']; % Where was the Heydarian, et al. repository built?
-
+function piezoAveraging(dataDir,saveTag,filtZ,zThresh,pathSetup,spaPATH,spaBUILD,overwriteSweep)
+%% HARD CODED PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Imaging Parameters
 xyScale = 133.33; % nm/pix in the txt file (which is different than the rendered image!)
-filtZ = 1; % If filtZ, will remove
-zThresh = 75; % nm, only used if filtZ
+
+%%%%% CPU/GPU settings (CPU = 0, GPU = 1)
+USE_GPU_GAUSSTRANSFORM = 1;
+USE_GPU_EXPDIST = 1;
 
 %%%%% Scale Sweep
 Nsweep = 25;
 
 %%%%% Heydarian, et al Step 1
 scale = 5; % Scaling used in the all-to-all registration, see Step 1 for more comments
+% when the particles have a prefered orientation, like NPCs that lie in the
+% cell membrane, it is recommanded to do in-plane initialization to save 
+% computational time for example initAng = 1 (see pairFitting3D.m line 68). 
+initAng = 'grid_72.qua';
 
 %%%%% Heydarian, et al Step 2
 nIterations = 5; % number of lie-algebra avg and consistency check % iterations
-flagVisualizeSijHist = 1; % show S_ij histogram (boolean) 
+% flagVisualizeSijHist = 1; % show S_ij histogram (boolean) 
 threshold = 1; % consistency check threshold.
 
 %%%%% Heydarian, et al Step 3
 iter = 5; % number of bootstrapping iterations
 
+%% DEFAULTS FOR OPTIONAL INPUTS
+%%%%% Z-Filtering
+if ~exist(filtZ,'var') || isempty(filtZ)
+    filtZ = 0; % default to no filtering
+end
+if ~exist(zThresh,'var') || isempty(zThresh)
+    if filtZ
+        error('z-filtering requested but no threshold set')
+    else
+        zThresh = NaN;
+    end
+end
+
+%%%%% Path Setup
+if ~exist(pathSetup,'var') || isempty(pathSetup)
+    pathSetup = 1; % default to setting the paths correctly
+end
+if ~exist(spaPATH,'var') || isempty(spaPATH)
+    if pathSetup
+        error('When pathSetup is true, spaPATH is a required input.')
+    else
+        spaPATH = NaN;
+    end
+end
+if ~exist(spaBUILD,'var') || isempty(spaBUILD)
+    if pathSetup
+        warning('No build path set. Using the default of [spaPATH build\].')
+        spaBUILD = [spaPATH 'build\'];
+    else
+        spaBUILD = NaN;
+    end
+end
+
+%%%%% Overwriting pre-analyzed data
+if ~exist(overwriteSweep,'var') || isempty(overwriteSweep)
+    overwriteSweep = 0; % Default to not overwriting data
+end
+
 
 %% Set up paths to dependencies %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-restoredefaultpath % The SPA code is sensitive to the order that folders appear in the path :|
+if pathSetup
 
-% SPA code from Heydarian, et al.
-if ~strcmp(spaPATH(end),filesep) % Make sure directory is formatted properly
-    dataDir = [spaPATH filesep];
+    restoredefaultpath % The SPA code is sensitive to the order that folders appear in the path :|
+    
+    % SPA code from Heydarian, et al.
+    if ~strcmp(spaPATH(end),filesep) % Make sure directory is formatted properly
+        spaPATH = [spaPATH filesep];
+    end
+    addpath(genpath([spaPATH 'figtree\']));
+    addpath(genpath([spaPATH 'expdist\']));
+    addpath(genpath([spaPATH 'gausstransform\']));
+    addpath(genpath([spaPATH 'MATLAB\']));
+    addpath(genpath([spaPATH 'test\']));
+    
+    if ~strcmp(spaBUILD(end),filesep) % Make sure directory is formatted properly
+        spaBUILD = [spaBUILD filesep];
+    end
+    addpath(genpath([spaBUILD 'Release\mex']));
+    addpath(genpath([spaBUILD 'figtree\Release']));
+    
+    
+    clear RESTOREDEFAULTPATH_EXECUTED
+
 end
-addpath(genpath([spaPATH 'figtree\']));
-addpath(genpath([spaPATH 'expdist\']));
-addpath(genpath([spaPATH 'gausstransform\']));
-addpath(genpath([spaPATH 'MATLAB\']));
-addpath(genpath([spaPATH 'test\']));
-
-if ~strcmp(spaBUILD(end),filesep) % Make sure directory is formatted properly
-    dataDir = [spaBUILD filesep];
-end
-addpath(genpath([spaBUILD 'Release\mex']));
-addpath(genpath([spaBUILD 'figtree\Release']));
-
-% CPU/GPU settings (CPU = 0, GPU = 1)
-USE_GPU_GAUSSTRANSFORM = 1;
-USE_GPU_EXPDIST = 1;
-
-clear RESTOREDEFAULTPATH_EXECUTED
 
 %% Load the data
 if ~strcmp(dataDir(end),filesep) % Make sure directory is formatted properly
     dataDir = [dataDir filesep];
 end
 
-load([dataDir saveTag '_particles.mat'])
+load([dataDir saveTag '_particles.mat'],'particles','subParticles')
 
 % Optionally filtering
 if filtZ
@@ -97,31 +151,21 @@ if filtZ
 end
 
 %% Scale sweep (Heydarian, et al)
-% if ~exist([dataDir saveTag '_ScaleSweep_50particles_linspace0001-50-30.mat'],'file')
-
-    tic
+if ~exist([dataDir saveTag '_ScaleSweep_50particles_linspace0001-50-30.mat'],'file') || overwriteSweep
 
     [optimal_scale,scales_vec,cost_log,idxP] = scale_sweep(particles,Nsweep,1);
     saveas(gcf,[dataDir saveTag '_ScaleSweep_50particles_linspace0001-50-30.png'])
     save([dataDir saveTag '_ScaleSweep_50particles_linspace0001-50-30.mat'],'optimal_scale','scales_vec','cost_log','idxP','particles')
 
-    tScaleSweep = toc;
-
-% end
+end
 
 %% Heydarian, et al Step 1
 % all-to-all registration
-% tic
-% when the particles have a prefered orientation, like NPCs that lie in the
-% cell membrane, it is recommanded to do in-plane initialization to save 
-% computational time for example initAng = 1 (see pairFitting3D.m line 68). 
-initAng = 'grid_72.qua';
 
 % For NPC particle scale = 0.1 (10 nm) is the optimal choice. In other
 % cases, it is recommanded to use the scale_sweep() function to find the
 % optimal value. This needs to be done once for a structure (see Online
 % Methods and demo2.m)
-
 disp('all2all registration started!');
 disp(datestr(now))
 [RR, I] = all2all3D(subParticles, scale, initAng, USE_GPU_GAUSSTRANSFORM, USE_GPU_EXPDIST);
