@@ -64,3 +64,16 @@ To use this approach:
     - `minDist` is the minimum distance for two blobs to be considered neighbors; this parameter gets rid of self comparisons and over-finding artifacts
     - `bord` is the size of the region around each candidate PIEZO to include in the localization segmentation.
 8. Run `piezoSegment_beadsRemoved.m`. Outputs include sanity-check figures, a .mat file containing the entire workspace (for current troubleshooting purposes), and a particles.mat file containing the data for later averaging.
+
+### Particle Averaging
+The particle averaging workflow relies on the *_particles.mat_ file generated in the previous segmentation-of-candidate-PIEZOs step. The processing is completed by the function `piezoAveraging`, which is called by the script `batch_piezoAveraging`. To run the piezoAveraging function, you must have installed [smlm_datafusion3d_iPALM](https://github.com/aicjanelia/smlm_datafusion3d_iPALM) (see [Windows installation instructions here](https://github.com/aicjanelia/smlm_datafusion3d_iPALM/blob/develop/local_windows_install.md)).  Several PIEZO-specific parameters are hard-coded inside the piezoAveraging function; the batch script requires parameters related to the specific experiment.
+
+To use this approach:
+1. First make sure you have installed _smlm_datafusion3d_iPALM_ and have run the previous PIEZO candidate segmentation step on one or more experiments, resulting in one or more _particle.mat_ files.
+2. Set the parameters at the top of the script `batch_piezoAveraging.m`:
+    - `directories` is a list of the folders to be analyzed. Each folder should contain one particles.mat file.
+    - `zThresh` is a threshold, in nm, for removing localizations from the segmented particles. The previous segmentation step only considers 2D information; this parameter allows for the removal of particles far from the average z localization. The batch script will run the analysis function twice: once with this filter, and once without it.
+    - `spaPATH` is the full path to the _smlm_datafusion3d_iPALM_ repository.
+    - `spaBUILD` is the full path to the build of the _smlm_datafusion3d_iPALM_ repository. If you follow the Windows installation instructions, it will be located at [spaPATH 'build\'].
+    - `overwrite` is set to false (0) by default. This means the script will skip over any previously analyzed datasets.  If you would prefer for it to _replace_ exisiting .mat files, set overwrite to true/1.
+3. Run `batch_piezoAveraging.m`. Outputs include figures describing the generated superparticles (one direct and one with 3-fold symmetry) and intermediate processing steps; a .mat file for the intermediate scale sweep step; a .mat file saving the processing workspace; and .txt files of the superparticles in PeakSelector format.
