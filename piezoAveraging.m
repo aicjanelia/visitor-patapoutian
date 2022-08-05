@@ -9,16 +9,16 @@
 clc, clear, close all
 %% USER PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% Filenames & Directories
-dataDir = 'C:\Users\RMLee\Dropbox (HHMI)\Patapoutian_iPALM_data_analyzed\iPALM_data_processed_EM\21.11.02-5\Run1-561\';
-saveTag = 'Run1-561_c123_sum_X14_processed_overlay_Fiducial_transform_complete_IDL_unZ_175-285_ASCII_beadsRemoved_rRemoveX3_rRemoveY7';
+dataDir = 'Y:\Rachel\Patapoutian_iPALM_data_analyzed\iPALM_data_processed_EM\21.11.03-1\Run1-561';
+saveTag = 'Run1-561_c123_sum_X10_processed_overlay_KS_purged_IDL_unZ_175-300_ASCII_beadsRemoved_rRemoveX3_rRemoveY7';
 
 % dataDir & saveTag will be used in the file name used when saving figures, etc.
-spaPATH = 'C:\Users\RMLee\Documents\GitHub\smlm_datafusion3d\'; % Where is the Heydarian, et al. repository?
-spaBUILD = 'C:\Users\RMLee\Documents\GitHub\Fusion3DBuild\'; % Where was the Heydarian, et al. repository built?
+spaPATH = 'D:\Users\AICGUEST\Documents\GitHub\smlm_datafusion3d_iPALM\'; % Where is the Heydarian, et al. repository?
+spaBUILD = [spaPATH 'build\']; % Where was the Heydarian, et al. repository built?
 
 %%%%% Imaging Parameters
 xyScale = 133.33; % nm/pix in the txt file (which is different than the rendered image!)
-filtZ = 0; % If filtZ, will remove
+filtZ = 1; % If filtZ, will remove
 zThresh = 75; % nm, only used if filtZ
 
 %%%%% Scale Sweep
@@ -52,8 +52,8 @@ addpath(genpath([spaPATH 'test\']));
 if ~strcmp(spaBUILD(end),filesep) % Make sure directory is formatted properly
     dataDir = [spaBUILD filesep];
 end
-addpath(genpath([spaBUILD 'Debug\mex']));
-addpath(genpath([spaBUILD 'figtree\Debug']));
+addpath(genpath([spaBUILD 'Release\mex']));
+addpath(genpath([spaBUILD 'figtree\Release']));
 
 % CPU/GPU settings (CPU = 0, GPU = 1)
 USE_GPU_GAUSSTRANSFORM = 1;
@@ -97,13 +97,17 @@ if filtZ
 end
 
 %% Scale sweep (Heydarian, et al)
-tic
+% if ~exist([dataDir saveTag '_ScaleSweep_50particles_linspace0001-50-30.mat'],'file')
 
-[optimal_scale,scales_vec,cost_log,idxP] = scale_sweep(particles,Nsweep,1);
-saveas(gcf,[dataDir saveTag '_ScaleSweep_50particles_linspace0001-50-30.png'])
-save([dataDir saveTag '_ScaleSweep_50particles_linspace0001-50-30.mat'],'optimal_scale','scales_vec','cost_log','idxP','particles')
+    tic
 
-tScaleSweep = toc;
+    [optimal_scale,scales_vec,cost_log,idxP] = scale_sweep(particles,Nsweep,1);
+    saveas(gcf,[dataDir saveTag '_ScaleSweep_50particles_linspace0001-50-30.png'])
+    save([dataDir saveTag '_ScaleSweep_50particles_linspace0001-50-30.mat'],'optimal_scale','scales_vec','cost_log','idxP','particles')
+
+    tScaleSweep = toc;
+
+% end
 
 %% Heydarian, et al Step 1
 % all-to-all registration
@@ -282,4 +286,5 @@ box off
 saveas(gcf,[dataDir saveTag '_HistogramParticleLocalizationNumber.png'],'png')
 
 %% Save Everything
-save([dataDir saveTag '_piezoAveragingWorkspace.mat'],'-v7.3')
+save([dataDir saveTag '_piezoAveragingWorkspace.mat'])
+disp('Saving Complete')
