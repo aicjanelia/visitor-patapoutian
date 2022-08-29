@@ -172,6 +172,8 @@ disp(datestr(now))
 disp(datestr(now))
 disp('all2all registration finished!');
 
+% save([dataDir saveTag '_all2allIntermediate.mat'],'RR','I')
+
 %% Heydarian, et al Step 2
 % iterations of:
 % 2-1 lie-algebra averaging of relative transformation
