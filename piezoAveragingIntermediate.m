@@ -174,7 +174,7 @@ disp(datestr(now))
 disp(datestr(now))
 disp('all2all registration finished!');
 
-% save([dataDir saveTag '_all2allIntermediate.mat'],'RR','I')
+save([dataDir saveTag '_all2allIntermediate.mat'],'RR','I')
 
 %% Heydarian, et al Step 2
 % iterations of:
@@ -185,6 +185,7 @@ disp('all2all registration finished!');
 Nparticles = length(subParticles);
 [initAlignedParticles, sup] = relative2absolute(subParticles, RR, I, Nparticles, ...
                                                 nIterations, threshold, 1);
+save([dataDir saveTag '_relative2absolute.mat'],'initAlignedParticles','sup')
 
 visualizeSMLM3D(sup,scale/2, 1); % scale/2 seems to match demo script, but they didn't list it that way...
 xlabel('x'),ylabel('y'),zlabel('z')
