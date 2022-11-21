@@ -68,6 +68,8 @@ To use this approach:
 ### Particle Averaging
 The particle averaging workflow relies on the *_particles.mat_ file generated in the previous segmentation-of-candidate-PIEZOs step. The processing is completed by the function `piezoAveraging`, which is called by the script `batch_piezoAveraging`. To run the piezoAveraging function, you must have installed [smlm_datafusion3d_iPALM](https://github.com/aicjanelia/smlm_datafusion3d_iPALM) (see [Windows installation instructions here](https://github.com/aicjanelia/smlm_datafusion3d_iPALM/blob/develop/local_windows_install.md)).  Several PIEZO-specific parameters are hard-coded inside the piezoAveraging function; the batch script requires parameters related to the specific experiment.
 
+For large files or hundreds of candidate particles, the processing will be slow.  In this case, `batch_piezoAveragingIntermediate` is recommended as this script will save its progress as it goes, allowing for the processing to be interupted and restarted as necessary. Animated visualizations that rotate around the resulting superparticle can be created using `animateParticle`.
+
 To use this approach:
 1. First make sure you have installed _smlm_datafusion3d_iPALM_ and have run the previous PIEZO candidate segmentation step on one or more experiments, resulting in one or more _particle.mat_ files.
 2. Set the parameters at the top of the script `batch_piezoAveraging.m`:
@@ -77,3 +79,4 @@ To use this approach:
     - `spaBUILD` is the full path to the build of the _smlm_datafusion3d_iPALM_ repository. If you follow the Windows installation instructions, it will be located at [spaPATH 'build\'].
     - `overwrite` is set to false (0) by default. This means the script will skip over any previously analyzed datasets.  If you would prefer for it to _replace_ exisiting .mat files, set overwrite to true/1.
 3. Run `batch_piezoAveraging.m`. Outputs include figures describing the generated superparticles (one direct and one with 3-fold symmetry) and intermediate processing steps; a .mat file for the intermediate scale sweep step; a .mat file saving the processing workspace; and .txt files of the superparticles in PeakSelector format.
+4. For structures that are not necessarily flat in the xy plane, symmetry enforcement will add artifacts (as it only rotates around the z-axis). To address this, the script `batch_piezoSymFold` can be used to fit a plane to the initially aligned particles, rotate that plane to the xy plane, and then run the symmetry enforcement bootstrapping.
