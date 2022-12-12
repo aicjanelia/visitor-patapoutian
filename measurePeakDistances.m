@@ -14,6 +14,10 @@ directories = {'Y:\Rachel\Patapoutian_iPALM_data_analyzed\iPALM_data_processed_E
     'Y:\Rachel\Patapoutian_iPALM_data_analyzed\iPALM_data_processed_EM\CombinedParticles\posYODA1_2\'};
 
 scale = 5; % This is the scale used in the averaging process
+Nresample = 2000;
+epsilon = 1; % This will jump over the pixel-lockign gaps
+minpts = Nresample/4; % Higher density regions = shows up in more bootstrap instances, try 25%
+CIalpha = 0.025; % 0.025*2 = 0.05 for 95% CI
 
 %% MAKE MEASUREMENTS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 for mm = 1:length(directories)
@@ -77,14 +81,9 @@ for mm = 1:length(directories)
     set(gca,'DataAspectRatio',[1 1 1])
     saveas(gcf,[directory saveTag '_densityGrid_slice' num2str(meshPos) '.png'],'png')
     saveas(gcf,[directory saveTag '_densityGrid_slice' num2str(meshPos) '.fig'],'fig')
-    
-%     h = histogram(densityGrid(:));
-%     T2 = otsuthresh(h.BinCounts);    
-%     T2 = T2*max(densityGrid(:));
-    T2 = T*max(density(:));
 
     % Find pixels that are above the threshold
-    k = find(densityGrid>T2);
+    k = find(densityGrid>T*max(density(:)));
     [a,b,c]=ind2sub(size(densityGrid),k);
     edgeSize = max(size(densityGrid));
 
@@ -122,7 +121,7 @@ for mm = 1:length(directories)
 
     sz = scale; %window for fitting neighbor peaks
 
-    pkC = NaN*ones(size(pkx,1),4);
+    pkC = NaN*ones(size(pkx,1),3);
     for kk = 1:sum(keepers)
 
         r = sqrt(sum((data(:,1)-pkx(kk,2)+meshPos).^2 + (data(:,2)-pkx(kk,1)+meshPos).^2 + (data(:,3)-pkx(kk,3)+meshPos).^2,2));
@@ -137,11 +136,7 @@ for mm = 1:length(directories)
         yavg = sum(data(neigh,2).*tmp)./norm;
         zavg = sum(data(neigh,3).*tmp)./norm;
 
-        %  Radius of gyration (= sum(m_i * r_i^2)/sum(m_i)), m = mass, r = radius
-        r = sqrt(sum((data(neigh,1)-xavg).^2 + (data(neigh,2)-yavg).^2 + (data(neigh,3)-zavg).^2,2));
-        rg = sum(tmp.*r.^2)/norm;
-
-        pkC(kk,:) = [xavg yavg zavg rg]; % This is in nm relative in the superparticle coordinate system
+        pkC(kk,:) = [xavg yavg zavg]; % This is in nm relative in the superparticle coordinate system
 
     end
 %     disp(pkC)
@@ -187,14 +182,18 @@ for mm = 1:length(directories)
     saveas(gcf,[directory saveTag '_FoundPeaks2D.png'],'png')
     saveas(gcf,[directory saveTag '_FoundPeaks2D.fig'],'fig')
 
+    %% Save the direct data as an intermediate
+    save([directory saveTag '_PeakFinding.mat'],'data','density','blades','x','y','z','d',...
+        'densityGrid','pkx','pkC','toPlotCoarse','toPlotFine','dPeak','dPeakCoarse')
+
+
     %% Intermediate clean up
     close all
 
-    %% Bootstrap a confidence interval for the peak locations
+    %% Bootstrap Sampling
     disp('Starting Bootstrap')
 
     s = RandStream('mlfg6331_64'); % Reproducible random stream
-    Nresample = 1000;
     indSample = 1:size(data,1);
     pkCBoot = cell(Nresample,1);
     dataBoot = pkCBoot; densityBoot = pkCBoot; bladesBoot = pkCBoot;
@@ -202,8 +201,9 @@ for mm = 1:length(directories)
     dPeakBoot = pkCBoot;
 
     for ii = 1:Nresample
-        disp(ii)
-%         tic
+        if ~mod(ii,50)
+            disp(ii)
+        end
 
         %%% Randomly sample with replacement to a dataset of the same size
         dataSamp = datasample(s,indSample,size(data,1),'Replace',true);
@@ -232,12 +232,12 @@ for mm = 1:length(directories)
 %         colorbar       
 %         set(gcf,'Color','white')
 %         drawnow
-        
-        view([46 49])
-        xlim(25*[-1 1])
-        ylim(25*[-1 1])
-        zlim(10*[-1 1])
-        caxis((10^-5)*[2 6])
+%         
+%         view([46 49])
+%         xlim(25*[-1 1])
+%         ylim(25*[-1 1])
+%         zlim(10*[-1 1])
+%         caxis((10^-5)*[2 6])
     
         %%% Create Gridded Data to Calculate Coarse Peaks        
         meshPos = ceil(max([max(xSamp) abs(min(xSamp)) max(ySamp) abs(min(ySamp))]))+5; % Max position on the grid
@@ -250,16 +250,10 @@ for mm = 1:length(directories)
 %         figure(2)
 %         imagesc(densityGridSamp(:,:,meshPos))
 %         set(gca,'DataAspectRatio',[1 1 1])
-        
-        figure(10)
-        h = histogram(densityGridSamp(:));
-        T2 = otsuthresh(h.BinCounts);    
-        T2 = T2*max(densityGridSamp(:));
-        T2 = T*max(density(:));
 
         % Don't allow isolated components, only want to keep the main PIEZO
         % structure, not small peaks out in the 'noise'
-        vol = densityGridSamp>T2;
+        vol = densityGridSamp>T*max(density(:));
         CC = bwconncomp(vol);
         numPixels = cellfun(@numel,CC.PixelIdxList);
         [~,idx] = max(numPixels);
@@ -301,11 +295,10 @@ for mm = 1:length(directories)
         
         pkxSamp = [a(keepers>0) b(keepers>0) c(keepers>0)]; % Peaks in the mesh grid coordinate system
         
-        %%% Calculate Fine Peaks Based on Point Cloud 
-    
+        %%% Calculate Fine Peaks Based on Point Cloud     
         sz = scale; %window for fitting neighbor peaks
     
-        pkCSamp = NaN*ones(size(pkxSamp,1),4);
+        pkCSamp = NaN*ones(size(pkxSamp,1),3);
         for kk = 1:sum(keepers)
     
             r = sqrt(sum((dataSamp(:,1)-pkxSamp(kk,2)+meshPos).^2 + (dataSamp(:,2)-pkxSamp(kk,1)+meshPos).^2 + (dataSamp(:,3)-pkxSamp(kk,3)+meshPos).^2,2));
@@ -320,14 +313,9 @@ for mm = 1:length(directories)
             yavg = sum(dataSamp(neigh,2).*tmp)./norm;
             zavg = sum(dataSamp(neigh,3).*tmp)./norm;
     
-            %  Radius of gyration (= sum(m_i * r_i^2)/sum(m_i)), m = mass, r = radius
-            r = sqrt(sum((dataSamp(neigh,1)-xavg).^2 + (dataSamp(neigh,2)-yavg).^2 + (dataSamp(neigh,3)-zavg).^2,2));
-            rg = sum(tmp.*r.^2)/norm;
-    
-            pkCSamp(kk,:) = [xavg yavg zavg rg]; % This is in nm relative in the superparticle coordinate system
+            pkCSamp(kk,:) = [xavg yavg zavg]; % This is in nm relative in the superparticle coordinate system
     
         end
-%         disp(pkCSamp)
 
         figure(3)
         set(gcf,'Position',[500 275 560*2 420*2])    
@@ -365,31 +353,26 @@ for mm = 1:length(directories)
         zBoot{ii} = zSamp;
         dBoot{ii} = dSamp;
         dPeakBoot{ii} = dPeakSamp;
-        
-%         toc
 
     end
 
-    %% Save the data    
-    save([directory saveTag '_PeakFinding.mat'],'data','density','blades','x','y','z','d',...
+    save([directory saveTag '_PeakFindingBootstrap.mat'],'data','density','blades','x','y','z','d',...
         'densityGrid','pkx','pkC','toPlotCoarse','toPlotFine','dPeak','dPeakCoarse',...
         'pkCBoot','dataBoot','densityBoot','bladesBoot','xBoot','yBoot','zBoot','dBoot','dPeakBoot')
 
-    %% Leave One Out Analysis...
-    
+    %% Leave One Out Analysis...    
     disp('Starting LOO')
-tic
+
     Nloo = size(data,1);
     pkCLoo = cell(Nloo,1);
     dataLoo = pkCLoo; densityLoo = pkCLoo; bladesLoo = pkCLoo;
     xLoo = pkCLoo; yLoo = xLoo; zLoo = xLoo; dLoo = xLoo;
     dPeakLoo = pkCLoo;
 
-    for ii = 2197:Nloo
+    for ii = 1:Nloo
         if ~mod(ii,50)
             disp(ii)
         end
-%         tic
 
         % Leave one out
         dataSamp = ones(Nloo,1);
@@ -437,16 +420,10 @@ tic
 %         figure(2)
 %         imagesc(densityGridSamp(:,:,meshPos))
 %         set(gca,'DataAspectRatio',[1 1 1])
-        
-%         figure(10)
-%         h = histogram(densityGridSamp(:));
-%         T2 = otsuthresh(h.BinCounts);    
-%         T2 = T2*max(densityGridSamp(:));
-        T2 = T*max(density(:));
 
         % Don't allow isolated components, only want to keep the main PIEZO
         % structure, not small peaks out in the 'noise'
-        vol = densityGridSamp>T2;
+        vol = densityGridSamp>T*max(density(:));
         CC = bwconncomp(vol);
         numPixels = cellfun(@numel,CC.PixelIdxList);
         [~,idx] = max(numPixels);
@@ -492,7 +469,7 @@ tic
     
         sz = scale; %window for fitting neighbor peaks
     
-        pkCSamp = NaN*ones(size(pkxSamp,1),4);
+        pkCSamp = NaN*ones(size(pkxSamp,1),3);
         for kk = 1:sum(keepers)
     
             r = sqrt(sum((dataSamp(:,1)-pkxSamp(kk,2)+meshPos).^2 + (dataSamp(:,2)-pkxSamp(kk,1)+meshPos).^2 + (dataSamp(:,3)-pkxSamp(kk,3)+meshPos).^2,2));
@@ -507,14 +484,9 @@ tic
             yavg = sum(dataSamp(neigh,2).*tmp)./norm;
             zavg = sum(dataSamp(neigh,3).*tmp)./norm;
     
-            %  Radius of gyration (= sum(m_i * r_i^2)/sum(m_i)), m = mass, r = radius
-            r = sqrt(sum((dataSamp(neigh,1)-xavg).^2 + (dataSamp(neigh,2)-yavg).^2 + (dataSamp(neigh,3)-zavg).^2,2));
-            rg = sum(tmp.*r.^2)/norm;
-    
-            pkCSamp(kk,:) = [xavg yavg zavg rg]; % This is in nm relative in the superparticle coordinate system
+            pkCSamp(kk,:) = [xavg yavg zavg]; % This is in nm relative in the superparticle coordinate system
     
         end
-%         disp(pkCSamp)
 
 %         figure(3)
 %         set(gcf,'Position',[500 275 560*2 420*2])    
@@ -552,23 +524,58 @@ tic
         zLoo{ii} = zSamp;
         dLoo{ii} = dSamp;
         dPeakLoo{ii} = dPeakSamp;
-        
-%         toc
 
     end
-    toc
 
-    %% Measure Uncertainties
-    loo = cell2mat(pkCLoo);
-    looID = kmeans(looTest,size(pkC,1));
-    looClus = NaN*ones(max(looID),3);
+    save([directory saveTag '_PeakFindingLOO.mat'],'data','density','blades','x','y','z','d',...
+        'densityGrid','pkx','pkC','toPlotCoarse','toPlotFine','dPeak','dPeakCoarse',...
+        'pkCLoo','dataLoo','densityLoo','bladesLoo','xLoo','yLoo','zLoo','dLoo','dPeakLoo')
+
+
+    %% Cluster and Connect to Original Peaks
+
+    % Leave one out
+    looAll = cell2mat(pkCLoo);
+    looID = kmeans(looAll,size(pkC,1)); % Jackknifing should be very similar to the original based on high n, keep the same number of clusters as there were peaks
+    looCent = NaN*ones(max(looID),3); % centroid of the cluster
     for cc = 1:max(looID(:))
-        rowsNow = looID == c;
-        looClus(cc,:) = mean(loo(rowsNow,1:3));
+        rowsNow = (looID == cc);
+        looCent(cc,:) = mean(looAll(rowsNow,1:3),'omitnan');
     end
+
+    % Bootstrap
     allPeaks = cell2mat(pkCBoot);
     allH = cell2mat(dPeakBoot);
-    idClus = dbscan(allPeaks(:,1:3),1,250); % epsilon = 1 means jumping the pixel-locking gaps, minpoints ~ proportion of instances, so 100 = ~10%
+    idClus = dbscan(allPeaks(:,1:3),epsilon,minpts);
+    if max(idClus(:)) > size(pkC,1)
+        error('Unexpected Mapping')
+    end
+    bootCent = NaN*ones(max(idClus),3);
+    for cc = 1:max(idClus)
+        rowsNow = idClus == cc;
+        bootCent(cc,:) = mean(allPeaks(rowsNow,1:3));
+    end
+
+    % Connect clusters
+    orig2clus = NaN*ones(size(pkC,1),1);
+    orig2loo = orig2clus;
+    for cc = 1:size(pkC,1)
+        rowsNow = pkC(cc,1:3);
+        orig2clus(cc) = knnsearch(bootCent,rowsNow);
+        orig2loo(cc) = knnsearch(looCent,rowsNow);
+    end
+    clus2orig = NaN*ones(size(pkC,1),1);
+    for cc = 1:size(pkC,1)
+        rowsNow = bootCent(cc,1:3);
+        clus2orig(cc) = knnsearch(pkC,rowsNow);
+    end
+    loo2orig = NaN*ones(size(pkC,1),1);
+    for cc = 1:size(pkC,1)
+        rowsNow = looCent(cc,1:3);
+        loo2orig(cc) = knnsearch(pkC,rowsNow);
+    end
+
+    %% Plot Clustering Results
 
     figure(10)
     set(gcf,'Position',[400 400 560*2 420*2])
@@ -587,50 +594,53 @@ tic
     h = colorbar;
     set(get(h,'Label'),'String','DBSCAN cluster')    
     saveas(gcf,[directory saveTag 'BootstrapDBSCAN.png'],'png')
- %%   
-    cClus = NaN*ones(max(idClus),3);
-    alphaAll = NaN*ones(2,4,max(idClus));
-    CIall = alphaAll;
-    ahat = NaN*ones(max(idClus),4);
-    z0 = ahat;
-    clus2Orig = NaN*ones(max(idClus),1);
-    clus2Loo = clus2Orig;    
-    for cc = 1:max(idClus)
-        rowsNow = idClus == cc;
-        cClus(cc,:) = mean(allPeaks(rowsNow,1:3));
 
-        %%% connect this cluster to the appropriate original peak and loo cluster
-        idOrig = knnsearch(pkC(:,1:3),cClus(cc,:));
-        idLoo = knnsearch(looClus,cClus(cc,:));
-        clus2Orig(cc) = idOrig;
-        clus2Loo(cc) = idLoo;
+    figure(12)
+    set(gcf,'Position',[1200 200 560*2 420*2])
+    scatter3(looAll(:,1),looAll(:,2),looAll(:,3),[],looID)
+    set(gca,'DataAspectRatio',[1 1 1],'FontSize',16)
+    colormap(lines(max(looID(:))))
+    caxis([1 max(looID(:))])
+    h = colorbar;
+    set(get(h,'Label'),'String','kmeans cluster')    
+    saveas(gcf,[directory saveTag 'LOOkmeans.png'],'png')
 
-        sliceTest = (looID == idLoo);
-        sliceTest = looTest(sliceTest,:);
-        Ui = (size(sliceTest,1)-1)*(mean(sliceTest)-sliceTest);
-        ahat(cc,:) = sum(Ui.^3)./(sum(Ui.^2).^3/2)/6;
-    
-        z0(cc,:) = norminv(sum(allPeaks(rowsNow,:)<pkC(idOrig,:))/sum(rowsNow));
-        c = 0.025;
-    
-        alpha(1,:) = normcdf( z0(cc,:) + (z0(cc,:) + norminv(c)) / (1 - ahat(cc,:).*(z0(cc,:) + norminv(c))) );
-        alpha(2,:) = normcdf( z0(cc,:) + (z0(cc,:) + norminv(1-c)) / (1 - ahat(cc,:).*(z0(cc,:) + norminv(1-c))) );
-        alphaAll(:,:,cc) = alpha;
-    
+    %%   Uncertainty in Peak Locations
+    alphaPeaks = NaN*ones(2,3,max(idClus));
+    CIPeaks = alphaPeaks;
+    ahatPeaks = NaN*ones(max(idClus),3);
+    z0Peaks = ahatPeaks;
+    for cc = 1:size(pkC,1)
+
+        % First calculate the acceleration term
+        sliceLoo = (looID == orig2loo(cc));
+        sliceLoo = looAll(sliceLoo,1:3);
+        Ui = (size(sliceLoo,1)-1)*(mean(sliceLoo)-sliceLoo);
+        ahatPeaks(cc,:) = sum(Ui.^3)./(sum(Ui.^2).^3/2)/6;
+
+        % Now calculate the bias term    
+        rowsNow = (idClus == orig2clus(cc));
+        z0Peaks(cc,:) = norminv(sum(allPeaks(rowsNow,1:3)<pkC(cc,1:3))/sum(rowsNow));
+
+        % Combine to find the BCa alphas
+        clear alpha
+        alpha(1,:) = normcdf( z0Peaks(cc,:) + (z0Peaks(cc,:) + norminv(CIalpha)) / (1 - ahatPeaks(cc,:).*(z0Peaks(cc,:) + norminv(CIalpha))) );
+        alpha(2,:) = normcdf( z0Peaks(cc,:) + (z0Peaks(cc,:) + norminv(1-CIalpha)) / (1 - ahatPeaks(cc,:).*(z0Peaks(cc,:) + norminv(1-CIalpha))) );
+        alphaPeaks(:,:,cc) = alpha;
+
+        % Use BCa alphas to construct CI    
         CI = NaN*alpha;
         for dd = 1:size(alpha,2)
             CI(:,dd) = prctile(allPeaks(rowsNow,dd),alpha(:,dd)*100);
         end
-        CIall(:,:,cc) = CI;
-%         disp(cc)
-%         disp(CI)
+        CIPeaks(:,:,cc) = CI;
 
-        figure(cc)
+        figure(cc+100)
         set(gcf,'Position',[200 200 560*2.5 420])
         subplot(1,3,1)
         histogram(allPeaks(rowsNow,1));
         hold on
-        plot(pkC(idOrig,1)*[1 1],[0 300],'Color',[0.8500    0.3250    0.0980],'LineWidth',2)
+        plot(pkC(cc,1)*[1 1],[0 300],'Color',[0.8500    0.3250    0.0980],'LineWidth',2)
         plot(CI(1,1)*[1 1],[0 300],'--','Color',[0.8500    0.3250    0.0980],'LineWidth',2)
         plot(CI(2,1)*[1 1],[0 300],'--','Color',[0.8500    0.3250    0.0980],'LineWidth',2)
         plot(mean(allPeaks(rowsNow,1))*[1 1],[0 300],'LineWidth',2)
@@ -640,7 +650,7 @@ tic
         subplot(1,3,2)
         histogram(allPeaks(rowsNow,2));
         hold on
-        plot(pkC(idOrig,2)*[1 1],[0 300],'Color',[0.8500    0.3250    0.0980],'LineWidth',2)
+        plot(pkC(cc,2)*[1 1],[0 300],'Color',[0.8500    0.3250    0.0980],'LineWidth',2)
         plot(CI(1,2)*[1 1],[0 300],'--','Color',[0.8500    0.3250    0.0980],'LineWidth',2)
         plot(CI(2,2)*[1 1],[0 300],'--','Color',[0.8500    0.3250    0.0980],'LineWidth',2)
         plot(mean(allPeaks(rowsNow,2))*[1 1],[0 300],'LineWidth',2)
@@ -650,114 +660,196 @@ tic
         subplot(1,3,3)
         histogram(allPeaks(rowsNow,3));
         hold on
-        plot(pkC(idOrig,3)*[1 1],[0 300],'Color',[0.8500    0.3250    0.0980],'LineWidth',2)
+        plot(pkC(cc,3)*[1 1],[0 300],'Color',[0.8500    0.3250    0.0980],'LineWidth',2)
         plot(CI(1,3)*[1 1],[0 300],'--','Color',[0.8500    0.3250    0.0980],'LineWidth',2)
         plot(CI(2,3)*[1 1],[0 300],'--','Color',[0.8500    0.3250    0.0980],'LineWidth',2)
         plot(mean(allPeaks(rowsNow,3))*[1 1],[0 300],'LineWidth',2)
         hold off
         title('z')
 
-        saveas(gcf,[directory saveTag 'Bootstrap_cluster' num2str(cc) '.png'],'png')
+        saveas(gcf,[directory saveTag 'BootstrapDist_Peak' num2str(cc) '.png'],'png')
 
     end
-%%
-    figure(12)
+
+    % Figure of the peaks with confidence intervals
+    figure(13)
     set(gcf,'Position',[1200 200 560*2 420*2])
     plot3(pkC(:,1),pkC(:,2),pkC(:,3),'ok','MarkerFaceColor','k','MarkerSize',6)
     hold on
-    for cc = 1:size(CIall,3)
-        plot3(CIall(:,1,cc),pkC(clus2Orig(cc),2)*[1 1],pkC(clus2Orig(cc),3)*[1 1],'k','LineWidth',2)
-        plot3(pkC(clus2Orig(cc),1)*[1 1],CIall(:,2,cc),pkC(clus2Orig(cc),3)*[1 1],'k','LineWidth',2)
-        plot3(pkC(clus2Orig(cc),1)*[1 1],pkC(clus2Orig(cc),2)*[1 1],CIall(:,3,cc),'k','LineWidth',2)
+    for cc = 1:size(CIPeaks,3)
+        plot3(CIPeaks(:,1,cc),pkC(cc,2)*[1 1],pkC(cc,3)*[1 1],'k','LineWidth',2)
+        plot3(pkC(cc,1)*[1 1],CIPeaks(:,2,cc),pkC(cc,3)*[1 1],'k','LineWidth',2)
+        plot3(pkC(cc,1)*[1 1],pkC(cc,2)*[1 1],CIPeaks(:,3,cc),'k','LineWidth',2)
     end    
     hold off
     set(gca,'DataAspectRatio',[1 1 1],'FontSize',16)
+    saveas(gcf,[directory saveTag 'peakLocationCI.png'],'png')
 
-%     % Add distances with propagated errors
-%     function [d,ud] = distUncert(x1,x2,u1,u2)
-%         % x1, x2 = coordinates
-%         % u1, u2 = upper confidence interval
-%     end
-%     saveas(gcf,[directory saveTag 'BootstrapAllPeaks.png'],'png')
 
-%% Bootstrap distance measurements
-% What we really want is the distance, so that should be the derived
-% quantity, not the peak locations...
+    %% Uncertainty in Distances
 
-% allPeaks = cell2mat(pkCBoot);
-% allH = cell2mat(dPeakBoot);
-% idClus = dbscan(allPeaks,1,100); % epsilon = 1 means jumping the pixel-locking gaps, minpoints ~ proportion of instances, so 100 = ~10%
+    % For each instance, want to calculate the distances, so need to keep
+    % track of which instance each peak come from
+    eachPeak = NaN*ones(size(allPeaks,1),5);
+    counter = 1;    
+    for cc = 1:length(pkCBoot)
+        slice = pkCBoot{cc}(:,1:3);
+        eachPeak(counter:counter+size(slice,1)-1,:) = [slice cc*ones(size(slice,1),1) dPeakBoot{cc}];
+        counter = counter+size(slice,1);
+    end
 
-eachPeak = [NaN*allPeaks NaN*allPeaks(:,1:2)];
-counter = 1;
+    nPeaks = size(pkC,1);
+    % Boostrap Distances  
+    distBoot = NaN*ones(nPeaks,nPeaks,length(pkCBoot));
+    for cc = 1:length(pkCBoot)
+    
+        slice = eachPeak(:,end-1) == cc;
+        idSlice = idClus(slice);
+        slice = eachPeak(slice,:);
+    
+        % Remove the noise cluster from consideration
+        noiseClus = (idSlice == -1);
+        slice = slice(~noiseClus,:);
+        idSlice = idSlice(~noiseClus);
+        idSlice = clus2orig(idSlice); % move into the pkC reference
+    
+        toPdist = NaN*ones(nPeaks,3);
+        for dd = 1:nPeaks
+            sliceNow = idSlice == dd;
+            if sum(sliceNow) > 1
+                sliceNow = slice(sliceNow,1:3);
+                warning(['Extra Peaks detected for instance ' num2str(cc) ' (' num2str(size(sliceNow,1)) ' on peak ' num2str(dd) ')'])
+                toPdist(dd,:) = mean(sliceNow); % TODO: Is this the right behavior for a duplicate?
+            elseif sum(sliceNow)
+                toPdist(dd,:) = slice(sliceNow,1:3);
+            end
+        end
+    
+        distBoot(:,:,cc) = squareform(pdist(toPdist));
+    
+    end
 
-for cc = 1:length(pkCBoot)
-    slice = pkCBoot{cc};
-    eachPeak(counter:counter+size(slice,1)-1,:) = [slice cc*ones(size(slice,1),1) dPeakBoot{cc}];
-    counter = counter+size(slice,1);
-end
+    % For each LOO, want to calculate the distances, so need to keep
+    % track of which instance each peak come from
+    eachLoo = NaN*ones(size(looAll,1),5);
+    counter = 1;    
+    for cc = 1:length(pkCLoo)
+        slice = pkCLoo{cc}(:,1:3);
+        eachLoo(counter:counter+size(slice,1)-1,:) = [slice cc*ones(size(slice,1),1) dPeakLoo{cc}];
+        counter = counter+size(slice,1);
+    end
 
-idE = dbscan(eachPeak(:,1:3),1,250);
+    % LOO Distances  
+    distLoo = NaN*ones(nPeaks,nPeaks,length(pkCLoo));
+    for cc = 1:length(pkCLoo)
+    
+        slice = eachLoo(:,end-1) == cc;
+        idSlice = looID(slice);
+        slice = eachLoo(slice,:);
+    
+        % Remove the noise cluster from consideration
+        noiseClus = (idSlice == -1);
+        slice = slice(~noiseClus,:);
+        idSlice = idSlice(~noiseClus);
+        idSlice = loo2orig(idSlice);
+    
+        toPdist = NaN*ones(nPeaks,3);
+        for dd = 1:nPeaks
+            sliceNow = idSlice == dd;
+            if sum(sliceNow) > 1
+                sliceNow = slice(sliceNow,1:3);
+                warning(['Extra LOO Peaks detected for instance ' num2str(cc) ' (' num2str(sliceNow) ' on peak ' num2str(dd) ')'])
+                toPdist(dd,:) = mean(sliceNow); % TODO: Is this the right behavior for a duplicate?
+            elseif sum(sliceNow)
+                toPdist(dd,:) = slice(sliceNow,1:3);
+            end
+        end
+    
+        distLoo(:,:,cc) = squareform(pdist(toPdist));
+    
+    end
 
-figure(20)
-set(gcf,'Position',[400 400 560*2 420*2])
-scatter3(eachPeak(:,1),eachPeak(:,2),eachPeak(:,3),6,idE,'filled')
-set(gca,'DataAspectRatio',[1 1 1],'FontSize',16)
-colormap([0.75 0.75 0.75 ; 0.75 0.75 0.75 ; lines(max(idClus(:)))])
-caxis([-1 max(idClus(:))])
-h = colorbar;
-set(get(h,'Label'),'String','DBSCAN cluster')   
+    %%% Confidence Intervals
+    alphaDist = NaN*ones(2,nPeaks,nPeaks);
+    CIDist = alphaDist;
+    ahatDist = NaN*ones(nPeaks);
+    z0Dist = ahatDist;
 
-distAll = NaN*ones(6,6,length(pkCBoot));
-for cc = 1:length(pkCBoot)
+    figure(21) % Will be all the relevant distances
+    set(gcf,'Position',[400 400 560*2 420*2])
+    for cc = 1:nPeaks
+        for dd = cc+1:nPeaks
 
-%     fprintf([num2str(cc) ','])
-%     if ~mod(cc,25)
-%         fprintf('\n')
-%     end
+            dOrig = sqrt(sum((pkC(cc,1:3)-pkC(dd,1:3)).^2));
 
-    slice = eachPeak(:,5) == cc;
-    idSlice = idE(slice);
-    slice = eachPeak(slice,:);
+            % First calculate the acceleration term
+            sliceLoo = squeeze(distLoo(cc,dd,:));
+            sliceLoo = sliceLoo(~isnan(sliceLoo)); % In case of any instances where the peak was missing
+            Ui = (size(sliceLoo,1)-1)*(mean(sliceLoo)-sliceLoo);
+            ahatDist(cc,dd) = sum(Ui.^3)./(sum(Ui.^2).^3/2)/6;
 
-    % Remove the noise cluster from consideration
-    noiseClus = (idSlice == -1);
-    slice = slice(~noiseClus,:);
-    idSlice = idSlice(~noiseClus);
+            % Now calculate the bias term    
+            sliceBoot = squeeze(distBoot(cc,dd,:));
+            z0Dist(cc,dd) = norminv(sum(sliceBoot<dOrig)/sum(~isnan(sliceBoot)));
 
-%     if length(unique(idSlice)) ~= length(idSlice)
-%         disp(cc)
-%         error('Extra Peaks')
-%     end
+            % Combine to find the BCa alphas
+            clear alpha
+            alpha(1) = normcdf( z0Dist(cc,dd) + (z0Dist(cc,dd) + norminv(CIalpha)) / (1 - ahatDist(cc,dd).*(z0Dist(cc,dd) + norminv(CIalpha))) );
+            alpha(2) = normcdf( z0Dist(cc,dd) + (z0Dist(cc,dd) + norminv(1-CIalpha)) / (1 - ahatDist(cc,dd).*(z0Dist(cc,dd) + norminv(1-CIalpha))) );
+            alphaDist(:,cc,dd) = alpha;
 
-    toPdist = NaN*ones(6,3);
-    for dd = 1:6
-        sliceNow = idSlice == dd;
-        if sum(sliceNow) > 1
-            sliceNow = slice(sliceNow,1:3);
-            warning(['Extra Peaks detected for instance ' num2str(cc)])
-            toPdist(dd,:) = mean(sliceNow); % Is this the right behavior for a duplicate?
-        elseif sum(sliceNow)
-            toPdist(dd,:) = slice(sliceNow,1:3);
+            % Use BCa alphas to construct CI    
+            CI = NaN*alpha;
+            for ee = 1:length(alpha)
+                CI(ee) = prctile(sliceBoot,alpha(:,ee)*100);
+            end
+            CIDist(:,cc,dd) = CI;
+
+            subplot(nPeaks-1,nPeaks-1,(nPeaks-1)*(cc-1)+dd-1)
+            histogram(distBoot(cc,dd,:),15)
+            hold on
+            plot(dOrig*[1 1],[0 300],'Color',[0.8500    0.3250    0.0980],'LineWidth',2)
+            plot(CI(1)*[1 1],[0 300],'--','Color',[0.8500    0.3250    0.0980],'LineWidth',2)
+            plot(CI(2)*[1 1],[0 300],'--','Color',[0.8500    0.3250    0.0980],'LineWidth',2)
+            plot(mean(sliceBoot,'omitnan')*[1 1],[0 300],'LineWidth',2)
+            hold off        
+            title([num2str(cc) ' - ' num2str(dd)])
         end
     end
+    saveas(gcf,[directory saveTag 'BootstrapDist_EachDistance.png'],'png')
 
-    distAll(:,:,cc) = squareform(pdist(toPdist));
+    %% Figure of Distances
+    % Figure of the peaks with confidence intervals
+    dOrig = squareform(pdist(pkC));
+    cmapPlot = lines(nPeaks.^2);
 
-end
+    figure(22)
+    set(gcf,'Position',[400 200 560*2 420*2])
 
-figure(21)
-for cc = 1:6
-    for dd = 1:6
-        subplot(6,6,6*(dd-1)+cc)
-        histogram(distAll(cc,dd,:))
-    end
-end
+    plot3(pkC(:,1),pkC(:,2),pkC(:,3),'ok','MarkerFaceColor','k','MarkerSize',8)
+
+    hold on
+    for cc = 1:nPeaks
+        for dd = cc+1:nPeaks
+            plot3([pkC(cc,1) pkC(dd,1)],[pkC(cc,2) pkC(dd,2)],[pkC(cc,3) pkC(dd,3)],'Color',cmapPlot(nPeaks*(cc-1)+dd,:),'LineWidth',2)
+            toPlot = mean(pkC([cc dd],:));
+            text(toPlot(:,1),toPlot(:,2),toPlot(:,3),...
+                [num2str(dOrig(cc,dd),'%0.1f') ' (' num2str(CIDist(1,cc,dd),'%0.1f') ',' num2str(CIDist(2,cc,dd),'%0.1f') ')'],...
+                'Color',cmapPlot(nPeaks*(cc-1)+dd,:),'FontSize',16)
+        end
+    end    
+    hold off
+
+    xlabel('x','FontSize',16)
+    ylabel('y','FontSize',16)
+    zlabel('z','FontSize',16)
+    set(gca,'FontSize',16)
+    saveas(gcf,[directory saveTag 'distanceCI.fig'],'fig') % This figure makes no sense static, save fig for exploration   
 
 
     %% Save the data    
-    save([directory saveTag '_PeakFindingAll.mat']) % This is likely to be huge....
-
+    save([directory saveTag '_PeakFindingAll.mat']) % This is likely to be an annoying large file
+    
 end
 
 
