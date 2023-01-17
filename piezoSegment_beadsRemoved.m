@@ -23,7 +23,7 @@ xyScale = 133.33; % nm/pix in the txt file (which is different than the rendered
 
 %%%%% Rendered Image
 filenameImg = [dataDir saveTag '_r.tif']; % Filename (including path if not on current MATLAB path) for the rendered image
-nmPix = 2; % nm per pixel in the rendered image
+nmPix = 3; % nm per pixel in the rendered image
 
 %%%%% Rendered Peak Finding
 rBlade = 20/nmPix; % pixels, approximate size of a blade-blob
@@ -32,8 +32,8 @@ rThresh = rBlade/2; % pixels, don't allow two peaks within the size of the blade
 
 %%%%% Neighbor requirements
 neighborNumber = 2; % Number of neighbors each peak should have
-neighborDist = 50; % nm, maximum neighbor distance
-minDist = 10; % nm; zero gets rid of self comparisons, can also set higher to get rid of artifacts
+neighborDist = 60; % nm, maximum neighbor distance
+minDist = 9; % nm; zero gets rid of self comparisons, can also set higher to get rid of artifacts
 bord = 40/nmPix; % pixels, border to add around the candidates during segmentation
 
 %% First find peaks in the rendered data %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
