@@ -10,19 +10,24 @@ clc, clear, close all
 
 %% USER PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-directories = {'Y:\Rachel\Patapoutian_iPALM_data_analyzed\iPALM_data_processed_EM\CombinedParticles\negYODA1\',...
-    'Y:\Rachel\Patapoutian_iPALM_data_analyzed\iPALM_data_processed_EM\CombinedParticles\posYODA1_2\'};
+directories = {'Y:\instruments\RachelTmp\negYODA1\',...
+    'Y:\instruments\RachelTmp\posYODA1_2\'};
 
 scale = 5; % This is the scale used in the averaging process
-Nresample = 2000;
-epsilon = 1; % This will jump over the pixel-lockign gaps
-minpts = Nresample/4; % Higher density regions = shows up in more bootstrap instances, try 25%
+Nresample = 2000; % Number of bootstrap samples
+epsilon = 1; % DBSCAN for boostrap peaks, 1 nm will jump over the pixel-locking gaps
+minpts = Nresample/4; % DBSCAN for boostrap peaks, Higher density regions = shows up in more bootstrap instances, try 25%
 CIalpha = 0.025; % 0.025*2 = 0.05 for 95% CI
+
+% Should the analysis be repeated if the .mat file already exists?
+overwriteBoot = false;
+overwriteLoo = false;
 
 %% MAKE MEASUREMENTS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 for mm = 1:length(directories)
 
     directory = directories{mm};
+    disp(['Starting processing for ' directory])
     fileName = dir([directory '*_piezoAveragingWorkspaceRotated.mat']);
     if isempty(fileName)
         error('Rotated SuperParticle Not Found')
@@ -167,7 +172,7 @@ for mm = 1:length(directories)
     saveas(gcf,[directory saveTag '_FoundPeaksOnParticle.fig'],'fig')
 
     dPeak = mvksdensity(data,pkC(:,1:3),'Bandwidth',scale/2); %  This is the probability density ath the peaks
-    dPeakCoarse = mvksdensity(data,pkC(:,1:3),'Bandwidth',scale/2); %  This is the probability density ath the peaks
+    dPeakCoarse = mvksdensity(data,toPlotCoarse(:,1:3),'Bandwidth',scale/2); %  This is the probability density ath the peaks
 
     figure(4)
     scatter3(data(:,1),data(:,2),density(:),[],density(:))
@@ -190,8 +195,14 @@ for mm = 1:length(directories)
     %% Intermediate clean up
     close all
 
-    %% Bootstrap Sampling
-    disp('Starting Bootstrap')
+    %% Bootstrap Sampling    
+
+    if exist([directory saveTag '_PeakFindingBootstrap.mat'],'file') && ~overwriteBoot
+        disp('...loading previous bootstrap data')
+        load([directory saveTag '_PeakFindingBootstrap.mat'])
+
+    else % Starting in the middle of the bootstrap changes the reproducibility of the random stream, do all at once each time
+        disp('Starting Bootstrap')
 
     s = RandStream('mlfg6331_64'); % Reproducible random stream
     indSample = 1:size(data,1);
@@ -360,6 +371,8 @@ for mm = 1:length(directories)
         'densityGrid','pkx','pkC','toPlotCoarse','toPlotFine','dPeak','dPeakCoarse',...
         'pkCBoot','dataBoot','densityBoot','bladesBoot','xBoot','yBoot','zBoot','dBoot','dPeakBoot')
 
+    end
+
     %% Leave One Out Analysis...    
     disp('Starting LOO')
 
@@ -369,9 +382,20 @@ for mm = 1:length(directories)
     xLoo = pkCLoo; yLoo = xLoo; zLoo = xLoo; dLoo = xLoo;
     dPeakLoo = pkCLoo;
 
+    if exist([directory saveTag '_PeakFindingLOO.mat'],'file') && ~overwriteLoo
+        disp('...loading previous loo data')
+        load([directory saveTag '_PeakFindingLOO.mat'])
+    end
+
     for ii = 1:Nloo
+
         if ~mod(ii,50)
             disp(ii)
+        end
+
+        % LOO is reproducible, so start back up in the middle if necessary
+        if ~isempty(pkCLoo{ii})
+            continue
         end
 
         % Leave one out
@@ -503,7 +527,7 @@ for mm = 1:length(directories)
 %         view(2)
 %         drawnow
 % 
-%         dPeakSamp = mvksdensity(dataSamp,pkCSamp(:,1:3),'Bandwidth',scale/2); %  This is the probability density at the peaks
+        dPeakSamp = mvksdensity(dataSamp,pkCSamp(:,1:3),'Bandwidth',scale/2); %  This is the probability density at the peaks
 %         figure(4)
 %         scatter3(dataSamp(:,1),dataSamp(:,2),densitySamp(:),[],densitySamp(:))
 %         set(gca,'DataAspectRatio',[1 1 10^-6])
@@ -525,12 +549,21 @@ for mm = 1:length(directories)
         dLoo{ii} = dSamp;
         dPeakLoo{ii} = dPeakSamp;
 
+        if ~mod(ii,50)
+            % Saving is slow, so only save every 50 to avoid wasting time,
+            % but also have somewhat of an insurance policy
+            save([directory saveTag '_PeakFindingLOO.mat'],'data','density','blades','x','y','z','d',...
+                'densityGrid','pkx','pkC','toPlotCoarse','toPlotFine','dPeak','dPeakCoarse',...
+                'pkCLoo','dataLoo','densityLoo','bladesLoo','xLoo','yLoo','zLoo','dLoo','dPeakLoo')
+        end
+
     end
 
-    save([directory saveTag '_PeakFindingLOO.mat'],'data','density','blades','x','y','z','d',...
+    % Save final version
+     save([directory saveTag '_PeakFindingLOO.mat'],'data','density','blades','x','y','z','d',...
         'densityGrid','pkx','pkC','toPlotCoarse','toPlotFine','dPeak','dPeakCoarse',...
         'pkCLoo','dataLoo','densityLoo','bladesLoo','xLoo','yLoo','zLoo','dLoo','dPeakLoo')
-
+    
 
     %% Cluster and Connect to Original Peaks
 
