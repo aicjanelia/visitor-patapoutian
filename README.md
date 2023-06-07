@@ -2,24 +2,8 @@
 
 **Project:** Visualizing mechanically activated PIEZO channels
 
-**Dates:** 2021-10-25 - 2021-11-05
-
-**Hypothesis:** Inherently mechanosensitive mPIEZO1 expand and flatten upon channel activation and opening
-
-**Aims:**
-1. Determine optimal PIEZO1 constructs for iPALM imaging/Measure conformational parameters of mPIEZO1 without application of Yoda1 (closed	state).
-2. Measure conformational parameters of mPIEZO1 with application of Yoda1 (open state).
-3. Measure conformational parameters of mPIEZO1 with and without mechanical force (long-term goal).	
-
-| Fluorophore | Target | Notes |
-| :----: | :----: | :----: |
-Alexa-647 | N-terminus of PIEZO1 | 'blades'
-tdEOs | C-terminus of PIEZO1 | 'central pore'
-
 ## Analysis Workflow
 The current analysis tools are designed to work in tandem with the software PeakSelector, which allows for filtering of iPALM localizations and pixelated image rendering of the underlying data. The bead removal approach can be used separately from any downstream analysis to clean up localization data for better visualization in PeakSelector. The candidate PIEZO segmentation approach looks for three nearby peaks in a pixelated/rendered image of the data, and uses this information to segment the underlying localization data into candidate PIEZO 'particles.'
-
-**Example Data:** Initial testing of the analysis pipeline was conducted on the file _Run1-561_c123_sum_X14_processed_overlay_Fiducial_transform_complete_IDL.sav_ from the folder _21.1102-5/Run1-561/_
 
 **Acknowledgments:** The subfunctions `bpass`, `cntrd`, and `pkfnd` were adapted for MATLAB by [Daniel Blair and Eric Dufresne](https://site.physics.georgetown.edu/matlab/code.html) from the IDL Particle Tracking software developed by David Grier, John Crocker, and Eric Weeks.
 
