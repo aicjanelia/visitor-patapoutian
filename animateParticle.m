@@ -29,6 +29,7 @@ if exist('cLim','var') && ~isempty(cLim)
 end
 
 saveas(gcf,[directory filesep figName '_' addTag 'coolColormapPDF.png'],'png')  
+saveas(gcf,[directory filesep figName '_' addTag 'coolColormapPDF.fig'],'fig')  
 
 %%%% Rotate and record
 v = VideoWriter([directory figName '_pdf' addTag '.mp4'],'MPEG-4');
