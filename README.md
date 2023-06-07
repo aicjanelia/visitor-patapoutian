@@ -65,7 +65,7 @@ To use this approach:
 3. Run `batch_piezoAveraging.m`. Outputs include figures describing the generated superparticles (one direct and one with 3-fold symmetry) and intermediate processing steps; a .mat file for the intermediate scale sweep step; a .mat file saving the processing workspace; and .txt files of the superparticles in PeakSelector format.
 4. For structures that are not necessarily flat in the xy plane, symmetry enforcement will add artifacts (as it only rotates around the z-axis). To address this, the script `batch_piezoSymFold` can be used to fit a plane to the initially aligned particles, rotate that plane to the xy plane, and then run the symmetry enforcement bootstrapping.
 
-### Distance Measurments
+### (Optional) Peak Finding
 `measurePeakDistances.m` implements a peak finding algorithm to find the peaks in density of the 3D superparticle. The script creates a *_PeakFinding.mat_ file containing the found peak coordinates, as well as intermediate calculation steps.  To use set the two parameters at the top of the script:
 - `directories` is a list of the folders to be analyzed. Each folder should contain one _piezoAveragingWorkspaceRotated.mat file.
 - `scale` is the scale for calculating the probability density, which should be set to the same scale using in the averaging script.
