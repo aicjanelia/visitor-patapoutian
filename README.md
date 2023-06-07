@@ -1,9 +1,10 @@
 # Ardem Patapoutian -  iPALM
 
-**Project:** Visualizing mechanically activated PIEZO channels
+These scripts were developed to create a particle-averaged PIEZO structure from iPALM localization data.  The code is separated into modules which can be run separately as desired. The scripts save .mat files and image files of figures as output.  The analysis workflow described below was used in Mulhall, et. al.:
+>Eric M. Mulhall, Anant Gharpure, Rachel M. Lee, Adrienne E. Dubin, Jesse S. Aaron, Kara L. Marshall, Kathryn R. Spencer, Michael A. Reiche, Scott C. Henderson, Teng-Leong Chew, and Ardem Patapoutian. _Direct Observation of the Conformational States of PIEZO1_. (2023).
 
 ## Analysis Workflow
-The current analysis tools are designed to work in tandem with the software PeakSelector, which allows for filtering of iPALM localizations and pixelated image rendering of the underlying data. The bead removal approach can be used separately from any downstream analysis to clean up localization data for better visualization in PeakSelector. The candidate PIEZO segmentation approach looks for three nearby peaks in a pixelated/rendered image of the data, and uses this information to segment the underlying localization data into candidate PIEZO 'particles.'
+The current analysis tools are designed to work in tandem with the software [PeakSelector](https://github.com/gleb-shtengel/PeakSelector), which allows for filtering of iPALM localizations and pixelated image rendering of the underlying data. The bead removal approach can be used separately from any downstream analysis to clean up localization data for better visualization in PeakSelector. The candidate PIEZO segmentation approach looks for three nearby peaks in a pixelated/rendered image of the data, and uses this information to segment the underlying localization data into candidate PIEZO 'particles.'
 
 **Acknowledgments:** The subfunctions `bpass`, `cntrd`, and `pkfnd` were adapted for MATLAB by [Daniel Blair and Eric Dufresne](https://site.physics.georgetown.edu/matlab/code.html) from the IDL Particle Tracking software developed by David Grier, John Crocker, and Eric Weeks.
 
@@ -65,7 +66,5 @@ To use this approach:
 3. Run `batch_piezoAveraging.m`. Outputs include figures describing the generated superparticles (one direct and one with 3-fold symmetry) and intermediate processing steps; a .mat file for the intermediate scale sweep step; a .mat file saving the processing workspace; and .txt files of the superparticles in PeakSelector format.
 4. For structures that are not necessarily flat in the xy plane, symmetry enforcement will add artifacts (as it only rotates around the z-axis). To address this, the script `batch_piezoSymFold` can be used to fit a plane to the initially aligned particles, rotate that plane to the xy plane, and then run the symmetry enforcement bootstrapping.
 
-### (Optional) Peak Finding
-`measurePeakDistances.m` implements a peak finding algorithm to find the peaks in density of the 3D superparticle. The script creates a *_PeakFinding.mat_ file containing the found peak coordinates, as well as intermediate calculation steps.  To use set the two parameters at the top of the script:
-- `directories` is a list of the folders to be analyzed. Each folder should contain one _piezoAveragingWorkspaceRotated.mat file.
-- `scale` is the scale for calculating the probability density, which should be set to the same scale using in the averaging script.
+### Additional Tools
+The scripts in the _AdditionalTools_ subfolder were used in the development of the code to check features of the particle averaging scripts. They are not necessary to recreate the particle averaging results, but can be used for further exploration as useful.
